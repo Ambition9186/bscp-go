@@ -23,7 +23,7 @@ apps:
       {{ label.key }}: "{{ label.value }}"
       {%- endfor %}
     config_matches:
-      {%- for match in app.配置项匹配 %}
+      {%- for match in app.配置文件拉取筛选 %}
       - "{{ match }}"
       {%- endfor %}
   {%- endfor %}
@@ -39,10 +39,10 @@ labels:
   {{ label.key }}: "{{ label.value }}"
   {%- endfor %}
 {%- endif %}
-{%- if 全局配置项匹配 %}
-# 全局配置项匹配
+{%- if 全局配置文件拉取筛选 %}
+# 全局配置文件拉取筛选
 config_matches:
-  {%- for match in 全局配置项匹配 %}
+  {%- for match in 全局配置文件拉取筛选 %}
   - "{{ match }}"
   {%- endfor %}
 {%- endif %}
@@ -51,11 +51,16 @@ config_matches:
 feed_addrs:
   - {{ Feed服务地址 }}
 
-enable_resource: true
-
 # 是否启用P2P文件下载加速
 {%- if P2P文件下载加速 %}
 enable_p2p_download: true
 {%- else %}
 enable_p2p_download: false
 {%- endif %}
+
+# 是否上报资源
+{% if 是否上报资源 %}
+enable_resource: true
+{% else %}
+enable_resource: false
+{% endif %}
