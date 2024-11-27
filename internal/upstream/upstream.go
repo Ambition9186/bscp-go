@@ -17,10 +17,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/kit"
-	pbbase "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/protocol/core/base"
-	pbfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/protocol/feed-server"
-	sfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/sf-share"
+	"github.com/TencentBlueKing/bk-bscp/pkg/kit"
+	pbbase "github.com/TencentBlueKing/bk-bscp/pkg/protocol/core/base"
+	pbfs "github.com/TencentBlueKing/bk-bscp/pkg/protocol/feed-server"
+	sfs "github.com/TencentBlueKing/bk-bscp/pkg/sf-share"
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -53,6 +53,7 @@ type Upstream interface {
 	ListApps(vas *kit.Vas, req *pbfs.ListAppsReq) (*pbfs.ListAppsResp, error)
 	AsyncDownload(vas *kit.Vas, req *pbfs.AsyncDownloadReq) (*pbfs.AsyncDownloadResp, error)
 	AsyncDownloadStatus(vas *kit.Vas, req *pbfs.AsyncDownloadStatusReq) (*pbfs.AsyncDownloadStatusResp, error)
+	GetSingleFileContent(vas *kit.Vas, req *pbfs.GetSingleFileContentReq) (pbfs.Upstream_GetSingleFileContentClient, error)
 }
 
 // New create a rolling client instance.

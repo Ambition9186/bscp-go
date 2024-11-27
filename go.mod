@@ -3,9 +3,8 @@ module github.com/TencentBlueKing/bscp-go
 go 1.20
 
 require (
-	github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp v0.0.0-20240725112708-e12da408a771
+	github.com/TencentBlueKing/bk-bscp/pkg v0.0.0-20241115091835-0f0838e899ca
 	github.com/allegro/bigcache/v3 v3.1.0
-	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/olekukonko/tablewriter v0.0.5
@@ -17,7 +16,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	go.uber.org/atomic v1.11.0
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
-	golang.org/x/sync v0.7.0
+	golang.org/x/sync v0.8.0
 	golang.org/x/sys v0.21.0
 	google.golang.org/grpc v1.64.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -105,7 +104,7 @@ require (
 	golang.org/x/crypto v0.24.0 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/text v0.18.0 // indirect
 	golang.org/x/tools v0.22.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240617180043-68d350f18fd4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240617180043-68d350f18fd4 // indirect
@@ -114,5 +113,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gorm.io/gorm v1.25.4 // indirect
 	k8s.io/klog/v2 v2.130.0 // indirect
 )

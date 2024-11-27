@@ -23,13 +23,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/dal/table"
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/kit"
-	pbci "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/protocol/core/config-item"
-	pbhook "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/protocol/core/hook"
-	sfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/sf-share"
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/tools"
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/version"
+	"github.com/TencentBlueKing/bk-bscp/pkg/dal/table"
+	"github.com/TencentBlueKing/bk-bscp/pkg/kit"
+	pbci "github.com/TencentBlueKing/bk-bscp/pkg/protocol/core/config-item"
+	pbhook "github.com/TencentBlueKing/bk-bscp/pkg/protocol/core/hook"
+	pbfs "github.com/TencentBlueKing/bk-bscp/pkg/protocol/feed-server"
+	sfs "github.com/TencentBlueKing/bk-bscp/pkg/sf-share"
+	"github.com/TencentBlueKing/bk-bscp/pkg/tools"
+	"github.com/TencentBlueKing/bk-bscp/pkg/version"
 	"golang.org/x/exp/slog"
 	"golang.org/x/sync/errgroup"
 
@@ -112,13 +113,6 @@ func (c *ConfigItemFile) SaveToFile(dst string) error {
 			return err
 		}
 	}
-	// 3. check whether need to convert line break
-	if c.FileMeta.ConfigItemSpec.FileType == "text" && c.TextLineBreak != "" {
-		if err := util.ConvertTextLineBreak(dst, c.TextLineBreak); err != nil {
-			logger.Error("convert text file line break failed", slog.String("file", dst), logger.ErrAttr(err))
-			return err
-		}
-	}
 
 	return nil
 }
@@ -142,7 +136,20 @@ func (r *Release) compareRelease() (bool, error) {
 		logger.Warn("can not find metadata file, maybe you should exec pull command first")
 		return false, nil
 	}
-	if lastMetadata.ReleaseID == r.ReleaseID && util.StrSlicesEqual(lastMetadata.ConfigMatches, r.AppMate.Match) {
+
+	lastChangeEventData, err := eventmeta.GetLatestChangeEventFromFile(r.AppDir)
+	if err != nil {
+		logger.Error("get metadata file failed", logger.ErrAttr(err))
+		return false, err
+	}
+
+	if lastChangeEventData == nil {
+		logger.Warn("can not find change event file, maybe you should exec pull command first")
+		return false, err
+	}
+
+	if lastMetadata.ReleaseID == r.ReleaseID && util.StrSlicesEqual(lastMetadata.ConfigMatches, r.AppMate.Match) &&
+		lastChangeEventData.ReleaseID == r.ReleaseID && lastChangeEventData.Status == eventmeta.EventStatusSuccess {
 		r.AppMate.CurrentReleaseID = r.ReleaseID
 		logger.Info("current release is consistent with the received release, skip", slog.Any("releaseID", r.ReleaseID))
 		return true, nil
@@ -342,7 +349,10 @@ func clearOldFiles(dir string, files []*ConfigItemFile) error {
 
 // Execute 统一执行入口
 func (r *Release) Execute(steps ...Function) error {
-	var err error
+	var (
+		err  error
+		skip bool
+	)
 	// 填充appMate数据
 	r.AppMate.CursorID = r.CursorID
 	r.AppMate.StartTime = time.Now().UTC()
@@ -369,22 +379,28 @@ func (r *Release) Execute(steps ...Function) error {
 			}
 		}
 
-		if err = r.sendVersionChangeMessaging(bd); err != nil {
-			logger.Error("description failed to report the client change event",
-				slog.String("client_mode", r.ClientMode.String()), slog.Uint64("biz", uint64(r.BizID)),
-				slog.String("app", r.AppMate.App), logger.ErrAttr(err))
+		// 如果是跳过版本变更则不上报数据
+		if !skip {
+			if err = r.sendVersionChangeMessaging(bd); err != nil {
+				logger.Error("description failed to report the client change event",
+					slog.String("client_mode", r.ClientMode.String()), slog.Uint64("biz", uint64(r.BizID)),
+					slog.String("app", r.AppMate.App), logger.ErrAttr(err))
+			}
 		}
-
 	}()
 
 	// 一定要在该位置
 	// 不然会导致current_release_id是0的问题
-	var skip bool
 	if r.ClientMode == sfs.Watch {
 		skip, err = r.compareRelease()
 		if err != nil {
 			return err
 		}
+	}
+
+	// 跳过版本变更
+	if skip {
+		return nil
 	}
 
 	// 发送拉取前事件
@@ -398,10 +414,6 @@ func (r *Release) Execute(steps ...Function) error {
 		r.loopHeartbeat(bd)
 	}
 
-	if skip {
-		return nil
-	}
-
 	for _, step := range steps {
 		if err = step(); err != nil {
 			return err
@@ -412,8 +424,27 @@ func (r *Release) Execute(steps ...Function) error {
 }
 
 // sendVersionChangeMessaging 发送客户端版本变更信息
-func (r *Release) sendVersionChangeMessaging(bd *sfs.BasicData) error {
+func (r *Release) sendVersionChangeMessaging(bd *sfs.BasicData) (err error) {
 	r.AppMate.FailedDetailReason = util.TruncateString(r.AppMate.FailedDetailReason, 1024)
+
+	defer func(r *Release) {
+		// 在上报完消息后记录变更的ID以及成功还是失败
+		if r.AppMate.ReleaseChangeStatus != sfs.Processing {
+			err = r.recordChangeEvent()
+		}
+	}(r)
+
+	changeEvent, err := eventmeta.GetLatestChangeEventFromFile(r.AppDir)
+	if err != nil {
+		return err
+	}
+
+	if r.ClientMode != sfs.Pull {
+		if changeEvent != nil && changeEvent.ReleaseID > 0 {
+			r.AppMate.CurrentReleaseID = changeEvent.ReleaseID
+		}
+	}
+
 	pullPayload := sfs.VersionChangePayload{
 		BasicData:     bd,
 		Application:   r.AppMate,
@@ -580,7 +611,14 @@ func updateFiles(filesDir string, files []*ConfigItemFile, successDownloads *int
 				logger.Debug("file is already exists and has not been modified, skip download",
 					slog.String("file", filePath))
 			}
-			// 3. set file permission
+			// 4. check whether need to convert line break
+			if file.FileMeta.ConfigItemSpec.FileType == "text" && file.TextLineBreak != "" {
+				if err := util.ConvertTextLineBreak(filePath, file.TextLineBreak); err != nil {
+					logger.Error("convert text file line break failed", slog.String("file", filePath), logger.ErrAttr(err))
+					return err
+				}
+			}
+			// 5. set file permission
 			if runtime.GOOS != "windows" {
 				if err := util.SetFilePermission(filePath, file.FileMeta.ConfigItemSpec.Permission); err != nil {
 					logger.Warn("set file permission failed", slog.String("file", filePath), logger.ErrAttr(err))
@@ -609,4 +647,54 @@ func updateFiles(filesDir string, files []*ConfigItemFile, successDownloads *int
 	}
 
 	return nil
+}
+
+// recordChangeEvent 记录变更事件
+func (r *Release) recordChangeEvent() error {
+	var eventStatus eventmeta.EventStatus
+	if r.AppMate.ReleaseChangeStatus == sfs.Success {
+		eventStatus = eventmeta.EventStatusSuccess
+	} else {
+		eventStatus = eventmeta.EventStatusFailed
+	}
+	metadata := &eventmeta.ChangeEvent{
+		ReleaseID: r.ReleaseID,
+		Status:    eventStatus,
+	}
+	err := eventmeta.RecordChangeEvent(r.AppDir, metadata)
+	if err != nil {
+		logger.Error("record change event failed", logger.ErrAttr(err))
+		return err
+	}
+	return nil
+}
+
+// FileStreamReader 定义Reader结构体
+type FileStreamReader struct {
+	stream pbfs.Upstream_GetSingleFileContentClient
+	buffer []byte
+}
+
+// Read 从 stream 获取数据
+func (r *FileStreamReader) Read(p []byte) (int, error) {
+	if len(r.buffer) == 0 {
+		// 从 stream 拉取数据
+		resp, err := r.stream.Recv()
+		if err != nil {
+			return 0, err
+		}
+		r.buffer = resp.GetContent()
+	}
+
+	// 读取 buffer 数据到 p 中
+	n := copy(p, r.buffer)
+	// 更新 buffer，移除已读取的部分
+	r.buffer = r.buffer[n:]
+
+	return n, nil
+}
+
+// Close 关闭流
+func (r *FileStreamReader) Close() error {
+	return r.stream.CloseSend()
 }

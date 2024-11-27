@@ -24,11 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/criteria/constant"
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/kit"
-	pbfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/protocol/feed-server"
-	sfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/sf-share"
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/version"
+	"github.com/TencentBlueKing/bk-bscp/pkg/criteria/constant"
+	"github.com/TencentBlueKing/bk-bscp/pkg/kit"
+	pbfs "github.com/TencentBlueKing/bk-bscp/pkg/protocol/feed-server"
+	sfs "github.com/TencentBlueKing/bk-bscp/pkg/sf-share"
+	"github.com/TencentBlueKing/bk-bscp/pkg/version"
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 
@@ -276,8 +276,7 @@ func (w *watcher) OnReleaseChange(event *sfs.ReleaseChangeEvent) { // nolint
 	for _, subscriber := range w.subscribers {
 		if subscriber.App == pl.Instance.App &&
 			subscriber.UID == pl.Instance.Uid &&
-			reflect.DeepEqual(subscriber.Labels, pl.Instance.Labels) &&
-			subscriber.CurrentReleaseID != pl.ReleaseMeta.ReleaseID {
+			reflect.DeepEqual(subscriber.Labels, pl.Instance.Labels) {
 
 			// 更新心跳数据需要cursorID
 			subscriber.CursorID = cursorID

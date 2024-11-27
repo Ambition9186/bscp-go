@@ -16,9 +16,9 @@ package upstream
 import (
 	"fmt"
 
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/kit"
-	pbfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/protocol/feed-server"
-	sfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/sf-share"
+	"github.com/TencentBlueKing/bk-bscp/pkg/kit"
+	pbfs "github.com/TencentBlueKing/bk-bscp/pkg/protocol/feed-server"
+	sfs "github.com/TencentBlueKing/bk-bscp/pkg/sf-share"
 )
 
 // Handshake to the upstream server
@@ -69,6 +69,17 @@ func (uc *upstreamClient) Messaging(vas *kit.Vas, typ sfs.MessagingType, payload
 	}
 
 	return uc.client.Messaging(vas.Ctx, msg)
+}
+
+// GetSingleFileContent implements Upstream.
+func (uc *upstreamClient) GetSingleFileContent(vas *kit.Vas, req *pbfs.GetSingleFileContentReq) (
+	pbfs.Upstream_GetSingleFileContentClient, error) {
+
+	if err := uc.wait.WaitWithContext(vas.Ctx); err != nil {
+		return nil, err
+	}
+
+	return uc.client.GetSingleFileContent(vas.Ctx, req)
 }
 
 // PullAppFileMeta pulls the app file meta from upstream feed server.

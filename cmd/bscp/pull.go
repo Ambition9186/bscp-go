@@ -22,8 +22,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	sfs "github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/sf-share"
-	"github.com/TencentBlueKing/bk-bcs/bcs-services/bcs-bscp/pkg/version"
+	sfs "github.com/TencentBlueKing/bk-bscp/pkg/sf-share"
+	"github.com/TencentBlueKing/bk-bscp/pkg/version"
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/slog"
 
@@ -59,6 +59,11 @@ func Pull(cmd *cobra.Command, args []string) {
 	if err := conf.Validate(); err != nil {
 		logger.Error("validate config failed", logger.ErrAttr(err))
 		os.Exit(1)
+	}
+
+	// 设置pod name
+	if version.CLIENTTYPE == string(sfs.Sidecar) {
+		conf.Labels["pod_name"] = os.Getenv("HOSTNAME")
 	}
 
 	bscp, err := client.New(
@@ -194,7 +199,7 @@ func init() {
 	mustBindPFlag(pullViper, "file_cache.threshold_gb", PullCmd.Flags().Lookup("cache-threshold-gb"))
 	PullCmd.Flags().BoolP("enable-resource", "e", true, "enable report resource usage")
 	mustBindPFlag(pullViper, "enable_resource", PullCmd.Flags().Lookup("enable-resource"))
-	PullCmd.Flags().BoolP("text-line-break", "", false, "text file line break, default as LF")
+	PullCmd.Flags().StringP("text-line-break", "", "", "text file line break, default as LF")
 	mustBindPFlag(pullViper, "text_line_break", PullCmd.Flags().Lookup("text-line-break"))
 
 	for key, envName := range commonEnvs {
